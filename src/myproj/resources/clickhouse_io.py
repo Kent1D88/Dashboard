@@ -7,6 +7,7 @@ import dagster as dg
 import polars as pl
 from clickhouse_connect import get_client
 
+from myproj.utils.debug import debug_enabled
 
 @dataclass
 class PolarsClickHouseIOManager(dg.IOManager):
@@ -36,7 +37,12 @@ class PolarsClickHouseIOManager(dg.IOManager):
         if obj.is_empty():
             context.add_output_metadata({"clickhouse_table": table, "rows": 0, "skipped": True})
             return
-
+        if debug_enabled("io"):
+            context.log.debug(
+                f"[ClickHouse][WRITE] table={self.table} "
+                f"rows={obj.height} cols={obj.width}"
+            )
+        
         # Insert Arrow (rapide + types DateTime64 OK si déjà conformes à tes DDL)
         self._client().insert_arrow(table, obj.to_arrow())
 
@@ -45,4 +51,8 @@ class PolarsClickHouseIOManager(dg.IOManager):
     def load_input(self, context: dg.InputContext) -> pl.DataFrame:
         table = self._table_for(context.asset_key)
         arrow_tbl = self._client().query_arrow(f"SELECT * FROM {table}")
+        if debug_enabled("io"):
+            context.log.debug(
+                f"[ClickHouse][READ] table={self.table} rows={arrow_tbl.num_rows} cols={len(arrow_tbl.schema)}"
+            )
         return pl.from_arrow(arrow_tbl)

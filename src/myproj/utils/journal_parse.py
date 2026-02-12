@@ -655,7 +655,7 @@ def clean_actioncode_col(
 
 
 def add_UF_name(
-    df:pl.DataFrame,
+    df_journal:pl.DataFrame,
     df_UF: pl.DataFrame,
     UF_col: str = "UF",
     actioncode_col: str = "ACTION_CODE",
@@ -674,7 +674,7 @@ def add_UF_name(
 
     # 1) Construire la table de correspondance IPPDATE x UF à partir des lignes UFACTE
     pl_ippdate_uf = (
-        df.filter(
+        df_journal.filter(
             (pl.col(actioncode_col) == actioncode)
             & (pl.col(ippdate_col).is_not_null())
         )
@@ -723,7 +723,7 @@ def add_UF_name(
             )
 
     # 3) Join final : enrichir toutes les lignes de df partageant cet IPPDATE
-    df_enrichi = df.join(
+    df_enrichi = df_journal.join(
         pl_ippdate_uf,
         how="left",
         on=ippdate_col,

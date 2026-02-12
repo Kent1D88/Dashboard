@@ -54,9 +54,9 @@ class DashboardStaffConfig:
 # =========================
 # Config
 # =========================
-Period = Literal["day", "week", "month"]
+Period = Literal["hour", "day", "week", "month"]
 
-_TRUNC_MAP: dict[Period, str] = {"day": "1d", "week": "1w", "month": "1mo"}
+_TRUNC_MAP: dict[Period, str] = {"hour": "1h", "day": "1d", "week": "1w", "month": "1mo"}
 
 @dataclass(frozen=True)
 class DashboardQuery:

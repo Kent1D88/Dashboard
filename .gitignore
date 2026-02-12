@@ -14,3 +14,6 @@ wheels/
 **/data/
 
 **/dagster_home/
+**/.dagster/
+
+**/.DS_Store

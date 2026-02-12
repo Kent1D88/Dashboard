@@ -84,7 +84,7 @@ ORDER BY (SITE_UF, periode);
 CREATE TABLE IF NOT EXISTS gold_edor_hourly (
   SITE_UF String,
   date Date,
-  hour_int Int8,
+  hour_int UInt8,
   n_patients UInt32,
   capacity UInt32,
   EDOR Float64,

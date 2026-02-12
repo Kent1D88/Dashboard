@@ -1,31 +1,61 @@
 from __future__ import annotations
 import dagster as dg
 import polars as pl
+from myproj.utils.debug import log_df, log_msg
 
-@dg.asset(key_prefix=["dims"], name="multicol", description="Dimension MULTICOL (parquet)")
+
+@dg.asset(
+    key_prefix=["dims"],
+    name="multicol",
+    io_manager_key="minio",
+    description="Dimension MULTICOL (parquet)",
+    required_resource_keys={"store"},
+)
 def dim_multicol(context) -> pl.DataFrame:
     store = context.resources.store
-    return store.read_parquet("MULTICOL_202510150301.parquet")
+    df = store.read_parquet("MULTICOL_202510150301.parquet")
+    log_df(context, df, step="dims", name="multicol", keys=["IPP", "IPPDATE"])
+    return df
 
 
-@dg.asset(key_prefix=["dims"], name="uf", description="Référentiel UF (parquet)")
+@dg.asset(
+    key_prefix=["dims"],
+    name="uf",
+    io_manager_key="minio",
+    description="Référentiel UF (parquet)",
+    required_resource_keys={"store"},
+)
 def dim_uf(context) -> pl.DataFrame:
     store = context.resources.store
-    df = store.read_parquet("liste_UF.parquet")
-    # normalisation minimale (au cas où espaces/encodage)
-    return df.with_columns([
-        pl.col("UF").cast(pl.Utf8).str.strip_chars(),
-        pl.col("SITE_UF").cast(pl.Utf8).str.strip_chars(),
-        pl.col("TYPE_UF").cast(pl.Utf8).str.strip_chars(),
-    ])
+    df = (
+        store
+        .read_parquet("liste_UF.parquet")
+        .with_columns([
+            pl.col("UF").cast(pl.Utf8).str.strip_chars(),
+            pl.col("SITE_UF").cast(pl.Utf8).str.strip_chars(),
+            pl.col("TYPE_UF").cast(pl.Utf8).str.strip_chars(),
+        ])
+    )
+    log_df(context, df, step="dims", name="uf", keys=["UF"])
+    return df
 
 
-@dg.asset(key_prefix=["dims"], name="mappingbox", description="Capacités box (CSV)")
+@dg.asset(
+    key_prefix=["dims"],
+    name="mappingbox",
+    io_manager_key="minio",
+    description="Capacités box (CSV)",
+    required_resource_keys={"store"},
+)
 def dim_mappingbox(context) -> pl.DataFrame:
     store = context.resources.store
+
+    # ⚠️ ici tu lis un parquet, mais ton fichier dans data est MAPPINGBOX.csv
+    # donc soit tu changes en read_csv, soit tu convertis en parquet.
     df = store.read_parquet("MAPPINGBOX.parquet")
-    # si besoin: trims sur colonnes string
+
     for c, t in df.schema.items():
         if t == pl.Utf8:
             df = df.with_columns(pl.col(c).str.strip_chars())
+    log_df(context, df, step="dims", name="mappingbox", keys=["SITE_UF"])
     return df

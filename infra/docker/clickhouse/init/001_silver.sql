@@ -36,4 +36,4 @@ CREATE TABLE IF NOT EXISTS silver_stay_delays (
 )
 ENGINE = ReplacingMergeTree(ingested_at)
 PARTITION BY toYYYYMM(dt_DATERDV)
-ORDER BY (SITE_UF, IPPDATE_multicol);
+ORDER BY (SITE_UF, dt_DATERDV, IPPDATE_multicol);

@@ -25,7 +25,7 @@ def store() -> LocalStore:
 def clickhouse_client():
     return get_client(
         host=os.environ.get("CH_HOST", "localhost"),
-        port=int(os.environ.get("CH_PORT", "8124")),
+        port=int(os.environ.get("CH_PORT", "8123")),
         username=os.environ.get("CH_USER", "default"),
         password=os.environ.get("CH_PASSWORD", ""),
         database=os.environ.get("CH_DB", "default"),

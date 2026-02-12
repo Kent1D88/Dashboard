@@ -2,7 +2,9 @@ from __future__ import annotations
 import dagster as dg
 import polars as pl
 
-_BATCH_SIZE = 500_000
+from myproj.utils.debug import log_df, log_msg
+
+_BATCH_SIZE = 1_000_000
 URQUAL_PARTITIONS = dg.DynamicPartitionsDefinition(name="urqual_journal")
 
 @dg.asset(
@@ -31,4 +33,5 @@ def bronze_journal(context) -> pl.DataFrame:
     )
 
     context.log.info(f"Partition {part} | NOREC [{start},{end}] | rows={df.height}")
+    log_df(context, df, step="bronze", name="journal_partition", keys=["NOREC"])
     return df

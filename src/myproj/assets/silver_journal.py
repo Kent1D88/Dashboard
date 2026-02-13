@@ -20,7 +20,7 @@ from myproj.utils.debug import log_df, log_msg, debug_enabled
     description="SILVER — stay+delays (par partition NOREC) -> ClickHouse.silver_stay_delays",
     ins={
         "journal": dg.AssetIn(key=dg.AssetKey(["bronze", "journal"])),
-        "multicol": dg.AssetIn(key=dg.AssetKey(["dims", "multicol"])),
+        "multicol": dg.AssetIn(key=dg.AssetKey(["bronze", "multicol"])),
         "uf": dg.AssetIn(key=dg.AssetKey(["dims", "uf"])),
     },
 )

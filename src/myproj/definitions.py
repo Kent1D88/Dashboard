@@ -9,12 +9,14 @@ from myproj.resources.local_store import LocalStore
 from myproj.resources.minio_io import PolarsMinioParquetIOManager
 from myproj.resources.clickhouse_io import PolarsClickHouseIOManager
 
-from myproj.sensors.dashboard_sensor import silver_sensor, bronze_sensor, gold_sensor
+from myproj.sensors.journal_sensor import silver_journal_sensor, bronze_journal_sensor, gold_journal_sensor
+from myproj.sensors.multicol_sensor import bronze_multicol_sensor
 
 from myproj.assets.bronze_journal import bronze_journal
 from myproj.assets.silver_journal import silver_stay_delays
 from myproj.assets.gold_journal import gold_entries, gold_delays, gold_quality, gold_edor_hourly
-from myproj.assets.dims import dim_multicol, dim_uf, dim_mappingbox
+from myproj.assets.bronze_multicol import bronze_multicol
+from myproj.assets.dims import dim_uf, dim_mappingbox
 
 @dg.resource
 def store() -> LocalStore:
@@ -35,14 +37,16 @@ def clickhouse_client():
 defs = dg.Definitions(
     assets=[
         bronze_journal,
-        dim_multicol, dim_uf,
+        bronze_multicol,
+        dim_uf,
         silver_stay_delays,
         dim_mappingbox,
         gold_entries, gold_delays, gold_quality, gold_edor_hourly,
     ],
-    sensors=[bronze_sensor,
-             silver_sensor, 
-             gold_sensor,
+    sensors=[bronze_journal_sensor,
+             silver_journal_sensor, 
+             gold_journal_sensor,
+             bronze_multicol_sensor,
              ],
     resources={
         "store": store,

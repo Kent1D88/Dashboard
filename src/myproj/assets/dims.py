@@ -6,20 +6,6 @@ from myproj.utils.debug import log_df, log_msg
 
 @dg.asset(
     key_prefix=["dims"],
-    name="multicol",
-    io_manager_key="minio",
-    description="Dimension MULTICOL (parquet)",
-    required_resource_keys={"store"},
-)
-def dim_multicol(context) -> pl.DataFrame:
-    store = context.resources.store
-    df = store.read_parquet("MULTICOL_202510150301.parquet")
-    log_df(context, df, step="dims", name="multicol", keys=["IPP", "IPPDATE"])
-    return df
-
-
-@dg.asset(
-    key_prefix=["dims"],
     name="uf",
     io_manager_key="minio",
     description="Référentiel UF (parquet)",

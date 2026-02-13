@@ -12,7 +12,7 @@ from myproj.resources.clickhouse_io import PolarsClickHouseIOManager
 from myproj.sensors.journal_sensor import silver_journal_sensor, bronze_journal_sensor, gold_journal_sensor
 from myproj.sensors.multicol_sensor import bronze_multicol_sensor
 
-from myproj.assets.bronze_journal import bronze_journal
+from myproj.assets.bronze_journal import bronze_journal_raw, bronze_journal_monthly
 from myproj.assets.silver_journal import silver_stay_delays
 from myproj.assets.gold_journal import gold_entries, gold_delays, gold_quality, gold_edor_hourly
 from myproj.assets.bronze_multicol import bronze_multicol
@@ -36,7 +36,8 @@ def clickhouse_client():
 
 defs = dg.Definitions(
     assets=[
-        bronze_journal,
+        bronze_journal_raw,
+        bronze_journal_monthly,
         bronze_multicol,
         dim_uf,
         silver_stay_delays,

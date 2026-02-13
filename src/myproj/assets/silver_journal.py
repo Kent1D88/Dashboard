@@ -3,7 +3,7 @@ import datetime as dt
 import dagster as dg
 import polars as pl
 
-from myproj.assets.bronze_journal import URQUAL_PARTITIONS, _BATCH_SIZE
+from myproj.assets.bronze_journal import JOURNAL_MONTHLY
 
 # Tes fonctions métier (à adapter aux vrais chemins)
 import myproj.utils.journal_parse as JP
@@ -11,50 +11,71 @@ import myproj.utils.dashboard_functions as U
 from myproj.utils.ch_types import ensure_dt64us, ensure_strings
 from myproj.utils.debug import log_df, log_msg, debug_enabled
 
+def _next_month(partition_key: str) -> str:
+    year, month = map(int, partition_key.split("-"))
+    if month == 12:
+        return f"{year+1}-01"
+    return f"{year}-{month+1:02d}"
 
 @dg.asset(
     key_prefix=["silver"],
     name="stay_delays",
     io_manager_key="clickhouse_silver",
-    partitions_def=URQUAL_PARTITIONS,
+    partitions_def=JOURNAL_MONTHLY,
     description="SILVER — stay+delays (par partition NOREC) -> ClickHouse.silver_stay_delays",
     ins={
-        "journal": dg.AssetIn(key=dg.AssetKey(["bronze", "journal"])),
+        "journal": dg.AssetIn(key=dg.AssetKey(["bronze", "journal_monthly"])),
         "multicol": dg.AssetIn(key=dg.AssetKey(["bronze", "multicol"])),
         "uf": dg.AssetIn(key=dg.AssetKey(["dims", "uf"])),
     },
 )
 def silver_stay_delays(
     context,
-    journal: pl.DataFrame,
+    journal_monthly: pl.DataFrame,
     multicol: pl.DataFrame,
     uf: pl.DataFrame,
 ) -> pl.DataFrame:
     # sanity check (utile en debug)
     context.log.info("Starting silver transformation")
 
-    context.log.info(f"journal shape={journal.shape}")
+    context.log.info(f"journal shape={journal_monthly.shape}")
     context.log.info(f"multicol shape={multicol.shape}")
 
     if debug_enabled("silver"):
-        context.log.debug(f"journal columns={journal.columns}")
+        context.log.debug(f"journal columns={journal_monthly.columns}")
         context.log.debug(f"multicol columns={multicol.columns}")
         context.log.debug(f"uf columns={uf.columns}")
-        log_df(context, journal, step="silver", name="input_journal", keys=["NOREC"])
+        log_df(context, journal_monthly, step="silver", name="input_journal", keys=["NOREC"])
         log_df(context, multicol, step="silver", name="input_multicol", keys=["IPP", "IPPDATE"])
         log_df(context, uf, step="silver", name="input_uf", keys=["SITE_UF"])
         
-    part = int(context.partition_key)
-    start = (part - 1) * _BATCH_SIZE
-    end = start + _BATCH_SIZE - 1
-    context.log.info(f"SILVER stay_delays partition={part} NOREC[{start},{end}]")
+    part = context.partition_key  # "YYYY-MM"
+    
+    next_month = _next_month(partition_key=part)
 
-    # Parse + enrich
-    df_journal = JP.parse_journal(df_journal=journal, drop_col=True, normalize_keys=True)
-    log_df(context, df_journal, step="silver", name="after_parse_journal", keys=["NOREC"])
+    context.log.info(
+        f"SILVER monthly={part} lookahead={next_month}"
+    )
+    
+    # Charger le mois courant
+    df_current = journal_monthly
+    
+    # Charger le mois suivant
+    try:
+        df_next = context.asset_partition_for_input(
+            "journal_monthly",
+            partition_key=next_month
+        )
+    except Exception:
+        df_next = None
+
+    if df_next is not None:
+        df_events = pl.concat([df_current, df_next])
+    else:
+        df_events = df_current
     
     df_journal, _ = JP.add_concordance_bt_JOURNAL_MULTICOL(
-        df_journal=df_journal,
+        df_journal=df_events,
         df_multicol=multicol,
         drop_na_ippdate=True,
     )
@@ -90,9 +111,7 @@ def silver_stay_delays(
     now = dt.datetime.now()
     df_out = df_out.with_columns([
         pl.lit(now).alias("ingested_at"),
-        pl.lit(part).cast(pl.Int32).alias("norec_partition"),
-        pl.lit(start).cast(pl.Int64).alias("norec_start"),
-        pl.lit(end).cast(pl.Int64).alias("norec_end"),
+        pl.lit(part).alias("journal_partition"),
         pl.lit(context.run_id).alias("ingest_run_id"),
     ])
     

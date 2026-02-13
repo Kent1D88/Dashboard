@@ -16,4 +16,5 @@ wheels/
 **/dagster_home/
 **/.dagster/
 
-**/.DS_Store
+*.DS_Store
+*.ipynb_checkpoints

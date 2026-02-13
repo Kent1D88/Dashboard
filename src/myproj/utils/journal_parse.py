@@ -538,7 +538,7 @@ def add_concordance_bt_JOURNAL_MULTICOL(
     m_ippdate_col: str = "IPPDATE",
     m_dateentree_col:str = "DATE_ENTREE",
     m_heureentree_col:str = "HEURE_ENTREE",
-    drop_na_ippdate:bool = False,
+    drop_na_ippdate:bool = True,
 )-> Tuple[pl.DataFrame,pl.DataFrame]:
     """
     Enrichit le JOURNAL avec l'identifiant de séjour de référence MULTICOL + clé IST.
@@ -596,8 +596,10 @@ def add_concordance_bt_JOURNAL_MULTICOL(
     )
     
     if drop_na_ippdate:
-        return df_journal_new.filter(pl.col('IPPDATE_multicol').is_not_null()),df_corr
-
+        return (
+                df_journal_new.filter(pl.col("IST").is_not_null()),
+                df_corr
+            )
     return df_journal_new,df_corr
     
     

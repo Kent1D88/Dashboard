@@ -84,3 +84,43 @@ check:
 	curl -s -u admin:admin 'http://localhost:8123/?query=SELECT%201' || true
 	@echo ""
 	$(COMPOSE) ps
+
+# -----------------------------------------
+# Full clean + restart infra + dagster
+# -----------------------------------------
+dev-fresh:
+	@echo "========================================="
+	@echo "FRESH DEV ENVIRONMENT"
+	@echo "========================================="
+
+	@echo "Cleaning dagster_home..."
+	rm -rf ../../dagster_home
+	mkdir -p ../../dagster_home
+
+	@echo "Stopping containers..."
+	$(COMPOSE) down -v --remove-orphans
+
+	@echo "Removing volumes..."
+	rm -rf $(MINIO_VOL)
+	rm -rf $(CLICKHOUSE_VOL)
+
+	@echo "Starting services..."
+	$(COMPOSE) up -d
+
+	@echo "Waiting for services to become healthy..."
+
+	@echo "Waiting for MinIO API..."
+	@until curl -s http://localhost:9100/minio/health/live > /dev/null; do \
+		echo "  MinIO not ready..."; \
+		sleep 2; \
+	done
+
+	@echo "Waiting for ClickHouse..."
+	@until curl -s -u admin:admin 'http://localhost:8123/?query=SELECT%201' > /dev/null; do \
+		echo "  ClickHouse not ready..."; \
+		sleep 2; \
+	done
+
+	@echo "Services ready."
+	@echo "Starting Dagster..."
+	cd ../../ && ./start.sh

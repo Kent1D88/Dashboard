@@ -9,7 +9,7 @@ from myproj.resources.local_store import LocalStore
 from myproj.resources.minio_io import PolarsMinioParquetIOManager
 from myproj.resources.clickhouse_io import PolarsClickHouseIOManager
 
-from myproj.sensors.journal_sensor import bronze_journal_sensor
+from myproj.sensors.dashboard_sensor import silver_sensor, bronze_sensor, gold_sensor
 
 from myproj.assets.bronze_journal import bronze_journal
 from myproj.assets.silver_journal import silver_stay_delays
@@ -26,8 +26,8 @@ def clickhouse_client():
     return get_client(
         host=os.environ.get("CH_HOST", "localhost"),
         port=int(os.environ.get("CH_PORT", "8123")),
-        username=os.environ.get("CH_USER", "default"),
-        password=os.environ.get("CH_PASSWORD", ""),
+        username=os.environ.get("CH_USER", "admin"),
+        password=os.environ.get("CH_PASSWORD", "admin"),
         database=os.environ.get("CH_DB", "default"),
     )
 
@@ -40,7 +40,10 @@ defs = dg.Definitions(
         dim_mappingbox,
         gold_entries, gold_delays, gold_quality, gold_edor_hourly,
     ],
-    sensors=[bronze_journal_sensor],
+    sensors=[bronze_sensor,
+             silver_sensor, 
+             gold_sensor,
+             ],
     resources={
         "store": store,
         "clickhouse_client": clickhouse_client,

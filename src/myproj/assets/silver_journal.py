@@ -85,7 +85,7 @@ def silver_stay_delays(
     )
 
     df_out = U.add_delay_columns(lf_stay=lf_stay).collect()
-    
+
     # tracking (conforme à ton DDL silver)
     now = dt.datetime.now()
     df_out = df_out.with_columns([
@@ -101,5 +101,6 @@ def silver_stay_delays(
     # Optionnel : éviter des surprises de types ClickHouse
     df_out = ensure_strings(df_out, ["SITE_UF", "IPPDATE_multicol", "mode_sortie_raw", "mode_sortie"])
     log_df(context, df_out, step="silver", name="stay_delays_output", keys=["SITE_UF", "IPPDATE_multicol", "dt_DATERDV"])
-    
+    context.log.info(f"Columns after stay: {df_out.columns}")
+    context.log.info(f"IST null count: {df_out.select(pl.col('IST').is_null().sum())}")
     return df_out

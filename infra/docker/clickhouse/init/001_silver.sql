@@ -1,13 +1,14 @@
 CREATE TABLE IF NOT EXISTS silver_stay_delays (
     SITE_UF String,
     IPPDATE_multicol String,
+    IST String,
 
-    dt_DATERDV DateTime64(6),
-    dt_HPIOA DateTime64(6),
-    dt_HPMED DateTime64(6),
-    dt_HPECINF DateTime64(6),
-    dt_HDECIS DateTime64(6),
-    dt_DHSORTIESAU DateTime64(6),
+    dt_DATERDV DateTime64(6, 'Europe/Paris'),
+    dt_HPIOA DateTime64(6, 'Europe/Paris'),
+    dt_HPMED DateTime64(6, 'Europe/Paris'),
+    dt_HPECINF DateTime64(6, 'Europe/Paris'),
+    dt_HDECIS DateTime64(6, 'Europe/Paris'),
+    dt_DHSORTIESAU DateTime64(6, 'Europe/Paris'),
 
     is_finish Bool,
     has_dp Bool,
@@ -28,7 +29,7 @@ CREATE TABLE IF NOT EXISTS silver_stay_delays (
     ioa_lt15 Bool,
     med_lt60 Bool,
 
-    ingested_at DateTime64(6),
+    ingested_at DateTime64(6, 'Europe/Paris'),
     norec_partition Int32,
     norec_start Int64,
     norec_end Int64,
@@ -36,4 +37,4 @@ CREATE TABLE IF NOT EXISTS silver_stay_delays (
 )
 ENGINE = ReplacingMergeTree(ingested_at)
 PARTITION BY toYYYYMM(dt_DATERDV)
-ORDER BY (SITE_UF, dt_DATERDV, IPPDATE_multicol);
+ORDER BY (SITE_UF, dt_DATERDV, IST);

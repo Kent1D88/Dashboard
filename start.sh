@@ -15,8 +15,8 @@ export MINIO_PREFIX=dashboard
 export CH_HOST=localhost
 export CH_PORT=8123
 export CH_DB=default
-export CH_USER=default
-export CH_PASSWORD=
+export CH_USER=admin
+export CH_PASSWORD=admin
 export CH_ORDER_BY=NOREC
 
 # Debug

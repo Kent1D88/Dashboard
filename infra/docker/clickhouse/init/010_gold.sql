@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS gold_entries (
   SITE_UF String,
-  periode DateTime64(6),
+  periode DateTime64(6, 'Europe/Paris'),
   n_entries UInt32,
-  computed_at DateTime64(6)
+  computed_at DateTime64(6, 'Europe/Paris')
 )
 ENGINE = ReplacingMergeTree(computed_at)
 PARTITION BY toYYYYMM(periode)
@@ -10,7 +10,7 @@ ORDER BY (SITE_UF, periode);
 
 CREATE TABLE IF NOT EXISTS gold_delays (
   SITE_UF String,
-  periode DateTime64(6),
+  periode DateTime64(6, 'Europe/Paris'),
 
   d_entree_ioa_n UInt32,
   d_entree_ioa_mean Float64,
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS gold_delays (
   pct_ioa_lt15 Float64,
   pct_med_lt60 Float64,
 
-  computed_at DateTime64(6)
+  computed_at DateTime64(6, 'Europe/Paris')
 )
 ENGINE = ReplacingMergeTree(computed_at)
 PARTITION BY toYYYYMM(periode)
@@ -72,10 +72,10 @@ ORDER BY (SITE_UF, periode);
 
 CREATE TABLE IF NOT EXISTS gold_quality (
   SITE_UF String,
-  periode DateTime64(6),
+  periode DateTime64(6, 'Europe/Paris'),
   pct_no_dp Float64,
   pct_no_ccmu Float64,
-  computed_at DateTime64(6)
+  computed_at DateTime64(6, 'Europe/Paris')
 )
 ENGINE = ReplacingMergeTree(computed_at)
 PARTITION BY toYYYYMM(periode)
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS gold_edor_hourly (
   n_patients UInt32,
   capacity UInt32,
   EDOR Float64,
-  computed_at DateTime64(6)
+  computed_at DateTime64(6, 'Europe/Paris')
 )
 ENGINE = ReplacingMergeTree(computed_at)
 PARTITION BY toYYYYMM(date)

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Iterable, Optional, Literal, Sequence
+import datetime as dt
 
 import polars as pl
 # =========================
@@ -96,7 +97,7 @@ class DashboardSchema:
     Attributes
     ----------
     stay_col : str
-        Column name for unique stay identifier (after parse_journal, typically 'IPPDATE_multicol').
+        Column name for unique stay identifier (after parse_journal, typically 'IST').
     site_col : str
         Column name for site/unit identifier (typically 'SITE_UF').
     action_code_col : str
@@ -108,7 +109,7 @@ class DashboardSchema:
     dt_formats : tuple of str
         Supported datetime formats for parsing ACTION_DETAIL.
     """
-    stay_col: str = "IPPDATE_multicol"
+    stay_col: str = "IST"
     site_col: str = "SITE_UF"
     action_code_col: str = "ACTION_CODE"
     action_detail_col: str = "ACTION_DETAIL"
@@ -169,7 +170,8 @@ def _expr_parse_event_dt(
     formats: tuple[str, str],
     out: str = "event_dt",
 ) -> pl.Expr:
-    """Parse event timestamp from ACTION_DETAIL using two supported formats.
+    """Parse event timestamp from ACTION_DETAIL using two supported formats
+    and normalized to Europe/Paris timezone.
 
     Supported formats are tried in order and the first successful parse is used.
     If strict=False, parsing will not error on invalid formats and will yield null.
@@ -189,11 +191,14 @@ def _expr_parse_event_dt(
         Expression producing the parsed datetime, or null if parsing fails.
     """
     f1, f2 = formats
+    parsed = pl.coalesce([
+        pl.col(detail_col).str.strptime(pl.Datetime, f1, strict=False),
+        pl.col(detail_col).str.strptime(pl.Datetime, f2, strict=False),
+    ])
+
     return (
-        pl.coalesce([
-            pl.col(detail_col).str.strptime(pl.Datetime, f1, strict=False),
-            pl.col(detail_col).str.strptime(pl.Datetime, f2, strict=False),
-        ])
+        parsed
+        .dt.replace_time_zone("Europe/Paris")
         .alias(out)
     )
 
@@ -546,10 +551,14 @@ def delay_stats_by_site_period(
 
     # Percent IOA < 15 min and MED < 60 min (of those with non-null delays)
     agg += [
-        (pl.col("ioa_lt15").cast(pl.Int64).sum() / pl.col("d_entree_ioa").drop_nulls().len())
-          .alias("pct_ioa_lt15"),
-        (pl.col("med_lt60").cast(pl.Int64).sum() / pl.col("d_entree_med").drop_nulls().len())
-          .alias("pct_med_lt60"),
+        (pl.when(pl.col("d_entree_ioa").drop_nulls().len() > 0)
+            .then(pl.col("ioa_lt15").cast(pl.Int64).sum() / pl.col("d_entree_ioa").drop_nulls().len())
+            .otherwise(None)
+            .alias("pct_ioa_lt15")),
+        (pl.when(pl.col("d_entree_med").drop_nulls().len() > 0)
+            .then(pl.col("med_lt60").cast(pl.Int64).sum() / pl.col("d_entree_med").drop_nulls().len())
+            .otherwise(None)
+            .alias("pct_med_lt60")),
     ]
 
     return (
@@ -621,6 +630,8 @@ def build_hourly_presence(
     start_col: str = "dt_DATERDV",
     end_col: str = "dt_DHSORTIESAU",
     keep_open_stays: bool = True,
+    open_stays_end: str = "now",          # "now" ou "query_end"
+    max_duration_hours: int = 72,         # garde-fou anti-données aberrantes
 ) -> pl.LazyFrame:
     """Compute hourly patient presence by site/date/hour.
 
@@ -644,7 +655,10 @@ def build_hourly_presence(
         End datetime column (may be null for open stays).
     keep_open_stays : bool, default True
         If False, exclude stays with null end_col.
-
+    open_stays_end : str, default "now" 
+        If "now", treat open stays as ending at current time; if "query_end", treat as query.date_end. max_duration_hours : int, default 72 Maximum duration to consider for presence (to exclude aberrant data); applies to open stays.
+    max_duration_hours : int, default 72
+        For open stays, maximum duration to consider for presence (to exclude aberrant data). If the duration from start_col to open_stays_end exceeds this threshold, the stay will be treated as ending at start_col + max_duration_hours. 
     Returns
     -------
     pl.LazyFrame
@@ -657,28 +671,63 @@ def build_hourly_presence(
         lf = lf.pipe(apply_site_filter, query, site_col=site_col)
         lf = lf.pipe(apply_date_window, query, anchor_col=start_col)
 
-    if not keep_open_stays:
-        lf = lf.filter(pl.col(end_col).is_not_null())
+    # borne de fin pour les séjours ouverts
+    if open_stays_end == "query_end" and query is not None and query.date_end is not None:
+        end_open = pl.lit(query.date_end)
+    else:
+        end_open = (
+            pl.lit(dt.datetime.now(dt.timezone.utc))
+            .dt.replace_time_zone("Europe/Paris")
+            .dt.truncate("1h")
+        )
 
-    # ⚠️ Explosion : à n'utiliser qu'après réduction temporelle si besoin
-    return (
+    # end_effective :
+    # - si séjour fermé : dt_DHSORTIESAU
+    # - si séjour ouvert : now (ou query_end)
+    end_effective = (
+        pl.when(pl.col(end_col).is_not_null())
+          .then(pl.col(end_col))
+          .otherwise(end_open if keep_open_stays else None)
+          .alias("end_effective")
+    )
+
+    # garde-fou : on évite les ranges négatifs et les séjours “infini”
+    start_dt = pl.col(start_col)
+    end_dt = pl.col("end_effective")
+    
+    lf2 = (
         lf.select([site_col, start_col, end_col])
-          .with_columns(
-              pl.datetime_ranges(
-                  start=pl.col(start_col),
-                  end=pl.col(end_col),
-                  interval="1h",
-              ).alias("hour_list")
-          )
-          .explode("hour_list")
+          .with_columns([end_effective])
+          .filter(start_dt.is_not_null())
+          .filter(end_dt.is_not_null())
+          # end >= start
+          .with_columns([pl.max_horizontal([start_dt, end_dt]).alias("end_clipped")])
+          # cap durée
           .with_columns([
-              pl.col("hour_list").dt.date().alias("date"),
-              pl.col("hour_list").dt.hour().alias("hour_int"),
+              pl.min_horizontal([
+                  pl.col("end_clipped"),
+                  start_dt + pl.duration(hours=max_duration_hours)
+              ]).alias("end_final")
           ])
-          .group_by([site_col, "date", "hour_int"])
-          .len()
-          .rename({"len": "n_patients"})
-          .sort([site_col, "date", "hour_int"])
+    )
+    return (
+        lf2
+        .with_columns(
+            pl.datetime_ranges(
+                start=start_dt,
+                end=pl.col("end_final"),
+                interval="1h",
+            ).alias("hour_list")
+        )
+        .explode("hour_list")
+        .with_columns([
+            pl.col("hour_list").dt.date().alias("date"),
+            pl.col("hour_list").dt.hour().alias("hour_int"),
+        ])
+        .group_by([site_col, "date", "hour_int"])
+        .len()
+        .rename({"len": "n_patients"})
+        .sort([site_col, "date", "hour_int"])
     )
 
 
@@ -734,7 +783,7 @@ def entry_volumes_by_site_period(
     """Compute unique stay counts (entries) by site and period.
 
     This uses the stay-level table (one row per stay) and counts the number of stays
-    (unique IPPDATE_multicol) per (SITE_UF, periode), where `periode` is derived by
+    (unique IST) per (SITE_UF, periode), where `periode` is derived by
     truncating `anchor_col` according to `query.period`.
 
     Returns
@@ -749,7 +798,7 @@ def entry_volumes_by_site_period(
         .pipe(apply_date_window, query, anchor_col=anchor_col)
         .pipe(add_periode_column, query, anchor_col=anchor_col, out_col="periode")
         .group_by([site_col, "periode"])
-        .agg([pl.len().alias(out_col)])
+        .agg([pl.col("IST").n_unique().alias(out_col)])
         .sort([site_col, "periode"])
     )
     return lf
@@ -780,7 +829,7 @@ def entry_volumes_by_site_hour_of_day(
         .pipe(apply_date_window, query, anchor_col=anchor_col)
         .with_columns(pl.col(anchor_col).dt.hour().alias("hour_int"))
         .group_by([site_col, "hour_int"])
-        .agg([pl.len().alias(out_col)])
+        .agg([pl.col("IST").n_unique().alias(out_col)])
         .sort([site_col, "hour_int"])
     )
     return lf
